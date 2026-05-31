@@ -8,6 +8,7 @@ import DealsScreen from './screens/DealsScreen';
 import AreaScoreScreen from './screens/AreaScoreScreen';
 import TrendsScreen from './screens/TrendsScreen';
 import FavouritesScreen from './screens/FavouritesScreen';
+import ROIScreen from './screens/ROIScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -22,6 +23,7 @@ export default function App() {
               Deals: focused ? 'home' : 'home-outline',
               'Area Score': focused ? 'map' : 'map-outline',
               'Yields & Trends': focused ? 'trending-up' : 'trending-up-outline',
+              'ROI Calc': focused ? 'calculator' : 'calculator-outline',
               Favourites: focused ? 'heart' : 'heart-outline',
             };
             return <Ionicons name={icons[route.name]} size={size} color={color} />;
@@ -36,6 +38,7 @@ export default function App() {
         <Tab.Screen name="Deals" component={DealsScreen} options={{ title: 'Property Deals' }} />
         <Tab.Screen name="Area Score" component={AreaScoreScreen} />
         <Tab.Screen name="Yields & Trends" component={TrendsScreen} />
+        <Tab.Screen name="ROI Calc" component={ROIScreen} options={{ title: 'ROI Calculator' }} />
         <Tab.Screen name="Favourites" component={FavouritesScreen} />
       </Tab.Navigator>
     </NavigationContainer>
