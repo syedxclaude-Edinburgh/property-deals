@@ -53,25 +53,45 @@ export default function PropertyIntelScreen() {
   const fetchIntel = async () => {
     const clean = postcode.trim().toUpperCase().replace(/\s+/g, ' ');
     const noSpace = clean.replace(/\s/g, '');
-    if (!clean) { setError('Please enter a postcode.'); return; }
+    if (!clean) { setError('Please enter a postcode or area (e.g. EH1).'); return; }
     setError('');
     setLoading(true);
     setData(null);
 
     try {
-      // 1. Validate postcode
-      const geoRes = await fetch(`https://api.postcodes.io/postcodes/${noSpace}`);
-      const geoData = await geoRes.json();
-      if (geoData.status !== 200) { setError('Invalid postcode. Please try again.'); setLoading(false); return; }
+      // Detect full postcode vs partial (outcode only, e.g. "EH1", "M14")
+      // A full UK postcode always ends in digit + 2 letters (the inward code).
+      const isFullPostcode = /\d[A-Z]{2}$/.test(noSpace);
 
-      const { latitude, longitude, admin_district, region } = geoData.result;
-      const formattedPostcode = geoData.result.postcode;
-      const district = formattedPostcode.split(' ')[0];
+      let latitude, longitude, admin_district, region, formattedPostcode, district, isOutcode;
 
-      // 2. Land Registry sold prices (last 10 sales in postcode)
-      const lrUrl = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?propertyAddress.postcode=${encodeURIComponent(formattedPostcode)}&_pageSize=10&_sort=-transactionDate`;
-      const lrRes = await fetch(lrUrl).catch(() => null);
+      if (isFullPostcode) {
+        // 1a. Validate full postcode
+        const geoRes = await fetch(`https://api.postcodes.io/postcodes/${noSpace}`);
+        const geoData = await geoRes.json();
+        if (geoData.status !== 200) { setError('Invalid postcode. Try again or enter just the area (e.g. EH1).'); setLoading(false); return; }
+        ({ latitude, longitude, admin_district, region } = geoData.result);
+        formattedPostcode = geoData.result.postcode;
+        district = formattedPostcode.split(' ')[0];
+        isOutcode = false;
+      } else {
+        // 1b. Treat input as an outcode (partial postcode / area)
+        const outRes = await fetch(`https://api.postcodes.io/outcodes/${noSpace}`);
+        const outData = await outRes.json();
+        if (outData.status !== 200) { setError('Area not recognised. Try a postcode area like EH1, M14 or G12.'); setLoading(false); return; }
+        latitude = outData.result.latitude;
+        longitude = outData.result.longitude;
+        admin_district = (outData.result.admin_district && outData.result.admin_district[0]) || '';
+        region = (outData.result.region && outData.result.region[0]) || '';
+        formattedPostcode = outData.result.outcode;
+        district = outData.result.outcode;
+        isOutcode = true;
+      }
+
+      // 2. Land Registry sold prices (last 10 sales) — exact postcode only
       let soldPrices = [];
+      const lrUrl = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?propertyAddress.postcode=${encodeURIComponent(formattedPostcode)}&_pageSize=10&_sort=-transactionDate`;
+      const lrRes = isOutcode ? null : await fetch(lrUrl).catch(() => null);
       if (lrRes && lrRes.ok) {
         const lrData = await lrRes.json();
         const items = lrData?.result?.items || [];
@@ -146,6 +166,7 @@ export default function PropertyIntelScreen() {
         floodZones,
         lat: latitude,
         lng: longitude,
+        isOutcode,
       });
     } catch (e) {
       setError('Could not fetch data. Check your connection and try again.');
@@ -159,12 +180,12 @@ export default function PropertyIntelScreen() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Property Intelligence</Text>
-      <Text style={styles.subtitle}>Sold prices, planning constraints & flood risk</Text>
+      <Text style={styles.subtitle}>Enter a full postcode (EH1 1YZ) or just an area (EH1)</Text>
 
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="e.g. EH1 1YZ"
+          placeholder="e.g. EH1 1YZ or EH1"
           value={postcode}
           onChangeText={setPostcode}
           autoCapitalize="characters"
@@ -186,7 +207,9 @@ export default function PropertyIntelScreen() {
       {data && (
         <View>
           <View style={styles.areaHeader}>
-            <Text style={styles.areaTitle}>{data.postcode}</Text>
+            <Text style={styles.areaTitle}>
+              {data.postcode}{data.isOutcode ? ' (area)' : ''}
+            </Text>
             <Text style={styles.areaSub}>{data.area} · {data.region}</Text>
           </View>
 
@@ -249,6 +272,8 @@ export default function PropertyIntelScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
                 {data.soldPrices.map((s, i) => <SoldCard key={i} sale={s} />)}
               </ScrollView>
+            ) : data.isOutcode ? (
+              <Text style={styles.noData}>Individual sold prices need a full postcode (e.g. {data.district} 1AB). Planning & flood data above cover the whole {data.district} area.</Text>
             ) : (
               <Text style={styles.noData}>No recent sales found in this postcode. Try a nearby postcode.</Text>
             )}
