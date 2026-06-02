@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePostcode } from '../context/PostcodeContext';
 
 export default function TrendsScreen() {
-  const [postcode, setPostcode] = useState('');
+  const { postcode, setPostcode } = usePostcode();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');

@@ -4,6 +4,7 @@ import {
   ScrollView, StyleSheet, Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePostcode } from '../context/PostcodeContext';
 
 function Section({ title, icon, color, children }) {
   return (
@@ -81,7 +82,7 @@ function statusBucket(status) {
 }
 
 export default function PropertyIntelScreen() {
-  const [postcode, setPostcode] = useState('');
+  const { postcode, setPostcode } = usePostcode();
   const [planFilter, setPlanFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);

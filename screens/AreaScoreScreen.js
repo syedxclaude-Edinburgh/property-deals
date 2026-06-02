@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePostcode } from '../context/PostcodeContext';
 
 const SCORE_WEIGHTS = { crime: 0.35, schools: 0.35, transport: 0.3 };
 
@@ -24,7 +25,7 @@ function overallColor(score) {
 }
 
 export default function AreaScoreScreen() {
-  const [postcode, setPostcode] = useState('');
+  const { postcode, setPostcode } = usePostcode();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');

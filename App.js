@@ -10,11 +10,13 @@ import TrendsScreen from './screens/TrendsScreen';
 import FavouritesScreen from './screens/FavouritesScreen';
 import ROIScreen from './screens/ROIScreen';
 import PropertyIntelScreen from './screens/PropertyIntelScreen';
+import { PostcodeProvider } from './context/PostcodeContext';
 
 const Tab = createBottomTabNavigator();
 
 export default function App() {
   return (
+    <PostcodeProvider>
     <NavigationContainer>
       <StatusBar style="auto" />
       <Tab.Navigator
@@ -45,5 +47,6 @@ export default function App() {
         <Tab.Screen name="Favourites" component={FavouritesScreen} />
       </Tab.Navigator>
     </NavigationContainer>
+    </PostcodeProvider>
   );
 }
