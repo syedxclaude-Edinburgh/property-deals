@@ -191,11 +191,30 @@ export default function PropertyIntelScreen() {
           authority: r.area_name || '',
           status: r.app_state || r.status || 'Unknown',
           type: r.app_type || '',
+          size: r.app_size || '',
           date: r.start_date || r.date_received || '',
           url: r.url || '',
         }));
         planningAuthority = records[0]?.area_name || '';
       }
+
+      // Build a development summary from the applications
+      const summarise = (apps) => {
+        const s = { approved: 0, pending: 0, refused: 0, other: 0, major: [] };
+        apps.forEach(a => {
+          const st = (a.status || '').toLowerCase();
+          if (st.includes('approv') || st.includes('grant') || st.includes('permit')) s.approved++;
+          else if (st.includes('refus') || st.includes('reject') || st.includes('withdraw')) s.refused++;
+          else if (st.includes('pend') || st.includes('register') || st.includes('consult') || st.includes('submit')) s.pending++;
+          else s.other++;
+          // Flag larger / significant developments
+          if ((a.size || '').toLowerCase() === 'large' || (a.size || '').toLowerCase() === 'medium') {
+            s.major.push(a);
+          }
+        });
+        return s;
+      };
+      const planningSummary = summarise(planningApps);
 
       // 6. Avg sold price calculation
       const avgSold = soldPrices.length > 0
@@ -219,6 +238,7 @@ export default function PropertyIntelScreen() {
         isOutcode,
         planningApps,
         planningAuthority,
+        planningSummary,
       });
     } catch (e) {
       setError('Could not fetch data. Check your connection and try again.');
@@ -345,6 +365,41 @@ export default function PropertyIntelScreen() {
             ) : null}
             {data.planningApps.length > 0 ? (
               <View style={{ marginTop: 8 }}>
+                {/* Development summary */}
+                <View style={styles.summaryStats}>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statNum, { color: '#27ae60' }]}>{data.planningSummary.approved}</Text>
+                    <Text style={styles.statCaption}>Approved</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statNum, { color: '#f39c12' }]}>{data.planningSummary.pending}</Text>
+                    <Text style={styles.statCaption}>Under Review</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statNum, { color: '#e74c3c' }]}>{data.planningSummary.refused}</Text>
+                    <Text style={styles.statCaption}>Refused</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.activityNote}>
+                  {data.planningSummary.pending > 3
+                    ? '🔨 High development activity — area is actively changing.'
+                    : data.planningSummary.approved + data.planningSummary.pending > 0
+                    ? '📋 Moderate development activity in this area.'
+                    : 'ℹ️ Low development activity nearby.'}
+                </Text>
+
+                {/* Major developments callout */}
+                {data.planningSummary.major.length > 0 && (
+                  <View style={styles.majorBox}>
+                    <Text style={styles.majorTitle}>⚠️ Major / Medium Developments ({data.planningSummary.major.length})</Text>
+                    <Text style={styles.majorSub}>Larger schemes can affect local supply, demand & values:</Text>
+                    {data.planningSummary.major.slice(0, 3).map((m, i) => (
+                      <Text key={i} style={styles.majorItem} numberOfLines={2}>• {m.description}</Text>
+                    ))}
+                  </View>
+                )}
+
                 <Text style={styles.planIntro}>
                   {data.planningApps.length} recent application{data.planningApps.length !== 1 ? 's' : ''} within ~1km:
                 </Text>
@@ -428,7 +483,16 @@ const styles = StyleSheet.create({
   soldDate: { fontSize: 12, color: '#888', marginTop: 2 },
   soldType: { fontSize: 11, color: '#aaa', marginTop: 2 },
   noData: { color: '#aaa', fontSize: 13, fontStyle: 'italic', marginTop: 8 },
-  planIntro: { fontSize: 13, color: '#666', marginBottom: 10 },
+  planIntro: { fontSize: 13, color: '#666', marginBottom: 10, marginTop: 4 },
+  summaryStats: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#f8f9fa', borderRadius: 10, paddingVertical: 14, marginBottom: 10 },
+  statBox: { alignItems: 'center' },
+  statNum: { fontSize: 28, fontWeight: 'bold' },
+  statCaption: { fontSize: 11, color: '#888', marginTop: 2 },
+  activityNote: { fontSize: 13, color: '#444', textAlign: 'center', marginBottom: 12, fontWeight: '500' },
+  majorBox: { backgroundColor: '#fff8f0', borderWidth: 1, borderColor: '#f0d9b5', borderRadius: 10, padding: 12, marginBottom: 12 },
+  majorTitle: { fontSize: 13, fontWeight: '700', color: '#e67e22', marginBottom: 4 },
+  majorSub: { fontSize: 11, color: '#888', marginBottom: 8 },
+  majorItem: { fontSize: 12, color: '#555', lineHeight: 18, marginBottom: 4 },
   planCard: { backgroundColor: '#f8f9fa', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#eee' },
   planCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   planStatus: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
