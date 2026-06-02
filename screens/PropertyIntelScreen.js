@@ -71,8 +71,18 @@ function SoldCard({ sale }) {
   );
 }
 
+// Classify an application's status into a filter bucket
+function statusBucket(status) {
+  const st = (status || '').toLowerCase();
+  if (st.includes('approv') || st.includes('grant') || st.includes('permit')) return 'approved';
+  if (st.includes('refus') || st.includes('reject') || st.includes('withdraw')) return 'refused';
+  if (st.includes('pend') || st.includes('register') || st.includes('consult') || st.includes('submit')) return 'pending';
+  return 'other';
+}
+
 export default function PropertyIntelScreen() {
   const [postcode, setPostcode] = useState('');
+  const [planFilter, setPlanFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -84,6 +94,7 @@ export default function PropertyIntelScreen() {
     setError('');
     setLoading(true);
     setData(null);
+    setPlanFilter('all');
 
     try {
       // Detect full postcode vs partial (outcode only, e.g. "EH1", "M14")
@@ -365,20 +376,29 @@ export default function PropertyIntelScreen() {
             ) : null}
             {data.planningApps.length > 0 ? (
               <View style={{ marginTop: 8 }}>
-                {/* Development summary */}
+                {/* Development summary — tap a counter to filter */}
                 <View style={styles.summaryStats}>
-                  <View style={styles.statBox}>
+                  <TouchableOpacity
+                    style={[styles.statBox, planFilter === 'approved' && styles.statBoxActive]}
+                    onPress={() => setPlanFilter(planFilter === 'approved' ? 'all' : 'approved')}
+                  >
                     <Text style={[styles.statNum, { color: '#27ae60' }]}>{data.planningSummary.approved}</Text>
                     <Text style={styles.statCaption}>Approved</Text>
-                  </View>
-                  <View style={styles.statBox}>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.statBox, planFilter === 'pending' && styles.statBoxActive]}
+                    onPress={() => setPlanFilter(planFilter === 'pending' ? 'all' : 'pending')}
+                  >
                     <Text style={[styles.statNum, { color: '#f39c12' }]}>{data.planningSummary.pending}</Text>
                     <Text style={styles.statCaption}>Under Review</Text>
-                  </View>
-                  <View style={styles.statBox}>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.statBox, planFilter === 'refused' && styles.statBoxActive]}
+                    onPress={() => setPlanFilter(planFilter === 'refused' ? 'all' : 'refused')}
+                  >
                     <Text style={[styles.statNum, { color: '#e74c3c' }]}>{data.planningSummary.refused}</Text>
                     <Text style={styles.statCaption}>Refused</Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 <Text style={styles.activityNote}>
@@ -400,16 +420,37 @@ export default function PropertyIntelScreen() {
                   </View>
                 )}
 
-                <Text style={styles.planIntro}>
-                  {data.planningApps.length} recent application{data.planningApps.length !== 1 ? 's' : ''} within ~1km:
-                </Text>
-                {data.planningApps.map((app, i) => (
-                  <PlanningAppCard
-                    key={i}
-                    app={app}
-                    onOpen={() => app.url && Linking.openURL(app.url)}
-                  />
-                ))}
+                {(() => {
+                  const visible = planFilter === 'all'
+                    ? data.planningApps
+                    : data.planningApps.filter(a => statusBucket(a.status) === planFilter);
+                  const filterLabel = { approved: 'approved', pending: 'under review', refused: 'refused' }[planFilter];
+                  return (
+                    <>
+                      <View style={styles.planIntroRow}>
+                        <Text style={styles.planIntro}>
+                          {planFilter === 'all'
+                            ? `${visible.length} recent application${visible.length !== 1 ? 's' : ''} within ~1km:`
+                            : `${visible.length} ${filterLabel} application${visible.length !== 1 ? 's' : ''}:`}
+                        </Text>
+                        {planFilter !== 'all' && (
+                          <TouchableOpacity onPress={() => setPlanFilter('all')}>
+                            <Text style={styles.clearFilter}>Clear filter ✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {visible.length > 0 ? visible.map((app, i) => (
+                        <PlanningAppCard
+                          key={i}
+                          app={app}
+                          onOpen={() => app.url && Linking.openURL(app.url)}
+                        />
+                      )) : (
+                        <Text style={styles.noData}>No {filterLabel} applications in this area.</Text>
+                      )}
+                    </>
+                  );
+                })()}
               </View>
             ) : (
               <Text style={styles.noData}>
@@ -485,7 +526,10 @@ const styles = StyleSheet.create({
   noData: { color: '#aaa', fontSize: 13, fontStyle: 'italic', marginTop: 8 },
   planIntro: { fontSize: 13, color: '#666', marginBottom: 10, marginTop: 4 },
   summaryStats: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#f8f9fa', borderRadius: 10, paddingVertical: 14, marginBottom: 10 },
-  statBox: { alignItems: 'center' },
+  statBox: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 2, borderColor: 'transparent' },
+  statBoxActive: { borderColor: '#2c3e50', backgroundColor: '#fff' },
+  planIntroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  clearFilter: { color: '#2980b9', fontSize: 12, fontWeight: '600' },
   statNum: { fontSize: 28, fontWeight: 'bold' },
   statCaption: { fontSize: 11, color: '#888', marginTop: 2 },
   activityNote: { fontSize: 13, color: '#444', textAlign: 'center', marginBottom: 12, fontWeight: '500' },
