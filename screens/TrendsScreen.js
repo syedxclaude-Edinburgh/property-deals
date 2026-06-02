@@ -16,33 +16,35 @@ export default function TrendsScreen() {
     setData(null);
 
     try {
-      // Validate postcode
-      const geoRes = await fetch(`https://api.postcodes.io/postcodes/${clean}`);
-      const geoData = await geoRes.json();
-      if (geoData.status !== 200) { setError('Invalid postcode.'); setLoading(false); return; }
+      // Accept full postcode (ends digit + 2 letters) or partial area / outcode (e.g. M14)
+      const isFullPostcode = /\d[A-Z]{2}$/.test(clean);
+      let admin_district, region, displayPostcode, district;
 
-      const { admin_district, region, nuts } = geoData.result;
+      if (isFullPostcode) {
+        const geoRes = await fetch(`https://api.postcodes.io/postcodes/${clean}`);
+        const geoData = await geoRes.json();
+        if (geoData.status !== 200) { setError('Invalid postcode. Try again or enter just the area (e.g. M14).'); setLoading(false); return; }
+        ({ admin_district, region } = geoData.result);
+        displayPostcode = geoData.result.postcode;
+        district = displayPostcode.split(' ')[0];
+      } else {
+        const outRes = await fetch(`https://api.postcodes.io/outcodes/${clean}`);
+        const outData = await outRes.json();
+        if (outData.status !== 200) { setError('Area not recognised. Try a postcode area like M14, EH1 or G12.'); setLoading(false); return; }
+        admin_district = (outData.result.admin_district && outData.result.admin_district[0]) || '';
+        region = (outData.result.region && outData.result.region[0]) || '';
+        district = outData.result.outcode;
+        displayPostcode = outData.result.outcode + ' (area)';
+      }
+
       const area = admin_district || region || 'UK';
 
-      // ONS House Price Index — regional data (free, no key)
-      // Using the ONS API for HPI by local authority
-      const hpiRes = await fetch(
-        `https://api.ons.gov.uk/v1/dataset/house-price-index/timeseries/hpa/data`
-      ).catch(() => null);
-
-      // Land Registry average prices by postcode district (free, no key)
-      const district = geoData.result.postcode.split(' ')[0];
-      const lrRes = await fetch(
-        `https://landregistry.data.gov.uk/data/ukhpi/region/united-kingdom/month/2024-11.json`
-      ).catch(() => null);
-
-      // ONS Private Rental Market Statistics (PRMS) — regional averages
-      // We show estimated figures based on ONS published data for the region
+      // ONS Private Rental Market Statistics & House Price Index — regional averages (free public data)
       const rentalRegionData = getRegionalRentalData(region || 'England');
       const hpiRegionData = getRegionalHPIData(region || 'England');
 
       setData({
-        postcode: geoData.result.postcode,
+        postcode: displayPostcode,
         area,
         region: region || 'England',
         district,
@@ -59,12 +61,12 @@ export default function TrendsScreen() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Yields & Price Trends</Text>
-      <Text style={styles.subtitle}>ONS & Land Registry data by postcode</Text>
+      <Text style={styles.subtitle}>Full postcode (M14 5RQ) or area (M14) — ONS & Land Registry</Text>
 
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="e.g. M14 5RQ"
+          placeholder="e.g. M14 5RQ or M14"
           value={postcode}
           onChangeText={setPostcode}
           autoCapitalize="characters"

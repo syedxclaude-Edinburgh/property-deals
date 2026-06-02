@@ -37,12 +37,26 @@ export default function AreaScoreScreen() {
     setResult(null);
 
     try {
-      // Validate postcode and get lat/lng via postcodes.io (free, no key needed)
-      const geoRes = await fetch(`https://api.postcodes.io/postcodes/${clean}`);
-      const geoData = await geoRes.json();
-      if (geoData.status !== 200) { setError('Invalid postcode. Please try again.'); setLoading(false); return; }
+      // Accept full postcode (ends digit + 2 letters) or partial area / outcode (e.g. EH1)
+      const isFullPostcode = /\d[A-Z]{2}$/.test(clean);
+      let latitude, longitude, admin_district, parliamentary_constituency, displayPostcode;
 
-      const { latitude, longitude, admin_district, parliamentary_constituency } = geoData.result;
+      if (isFullPostcode) {
+        const geoRes = await fetch(`https://api.postcodes.io/postcodes/${clean}`);
+        const geoData = await geoRes.json();
+        if (geoData.status !== 200) { setError('Invalid postcode. Try again or enter just the area (e.g. EH1).'); setLoading(false); return; }
+        ({ latitude, longitude, admin_district, parliamentary_constituency } = geoData.result);
+        displayPostcode = geoData.result.postcode;
+      } else {
+        const outRes = await fetch(`https://api.postcodes.io/outcodes/${clean}`);
+        const outData = await outRes.json();
+        if (outData.status !== 200) { setError('Area not recognised. Try a postcode area like EH1, M14 or G12.'); setLoading(false); return; }
+        latitude = outData.result.latitude;
+        longitude = outData.result.longitude;
+        admin_district = (outData.result.admin_district && outData.result.admin_district[0]) || '';
+        parliamentary_constituency = (outData.result.parliamentary_constituency && outData.result.parliamentary_constituency[0]) || '';
+        displayPostcode = outData.result.outcode + ' (area)';
+      }
 
       // Crime data from UK Police API (free, no key needed)
       const crimeRes = await fetch(`https://data.police.uk/api/crimes-street/all-crime?lat=${latitude}&lng=${longitude}`);
@@ -65,7 +79,7 @@ export default function AreaScoreScreen() {
       );
 
       setResult({
-        postcode: geoData.result.postcode,
+        postcode: displayPostcode,
         area: admin_district || parliamentary_constituency || clean,
         crimeScore,
         crimeCount,
@@ -83,12 +97,12 @@ export default function AreaScoreScreen() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Area Desirability Score</Text>
-      <Text style={styles.subtitle}>Enter a postcode to analyse the area</Text>
+      <Text style={styles.subtitle}>Enter a full postcode (M14 5RQ) or area (M14)</Text>
 
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder="e.g. M14 5RQ"
+          placeholder="e.g. M14 5RQ or M14"
           value={postcode}
           onChangeText={setPostcode}
           autoCapitalize="characters"
