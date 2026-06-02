@@ -34,6 +34,33 @@ function Tag({ label, color }) {
   );
 }
 
+function statusColor(status) {
+  const s = (status || '').toLowerCase();
+  if (s.includes('approv') || s.includes('grant') || s.includes('permit')) return '#27ae60';
+  if (s.includes('refus') || s.includes('reject') || s.includes('withdraw')) return '#e74c3c';
+  if (s.includes('pend') || s.includes('register') || s.includes('consult')) return '#f39c12';
+  return '#888';
+}
+
+function PlanningAppCard({ app, onOpen }) {
+  return (
+    <TouchableOpacity style={styles.planCard} onPress={onOpen} disabled={!app.url}>
+      <View style={styles.planCardTop}>
+        <View style={[styles.planStatus, { backgroundColor: statusColor(app.status) }]}>
+          <Text style={styles.planStatusText}>{app.status}</Text>
+        </View>
+        <Text style={styles.planDate}>{app.date}</Text>
+      </View>
+      <Text style={styles.planDesc} numberOfLines={3}>{app.description}</Text>
+      {app.address ? <Text style={styles.planAddress} numberOfLines={1}>{app.address}</Text> : null}
+      <View style={styles.planFooter}>
+        <Text style={styles.planRef}>{app.reference}</Text>
+        {app.url ? <Ionicons name="open-outline" size={13} color="#2980b9" /> : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function SoldCard({ sale }) {
   return (
     <View style={styles.soldCard}>
@@ -147,7 +174,30 @@ export default function PropertyIntelScreen() {
         else if (floodZones > 0) floodRisk = 'Low';
       }
 
-      // 5. Avg sold price calculation
+      // 5. Local council planning applications (PlanIt aggregator — free, no key)
+      // krad = search radius in km around the postcode/area
+      let planningApps = [];
+      let planningAuthority = '';
+      const planitPcode = encodeURIComponent(formattedPostcode);
+      const planitUrl = `https://www.planit.org.uk/api/applics/json?pcode=${planitPcode}&krad=1&pg_sz=15&sort=-start_date`;
+      const planitRes = await fetch(planitUrl).catch(() => null);
+      if (planitRes && planitRes.ok) {
+        const planitData = await planitRes.json();
+        const records = planitData?.records || [];
+        planningApps = records.map(r => ({
+          reference: r.reference || r.name || '',
+          description: r.description || 'No description provided',
+          address: r.address || '',
+          authority: r.area_name || '',
+          status: r.app_state || r.status || 'Unknown',
+          type: r.app_type || '',
+          date: r.start_date || r.date_received || '',
+          url: r.url || '',
+        }));
+        planningAuthority = records[0]?.area_name || '';
+      }
+
+      // 6. Avg sold price calculation
       const avgSold = soldPrices.length > 0
         ? Math.round(soldPrices.reduce((s, p) => s + parseInt(p.amount), 0) / soldPrices.length)
         : null;
@@ -167,6 +217,8 @@ export default function PropertyIntelScreen() {
         lat: latitude,
         lng: longitude,
         isOutcode,
+        planningApps,
+        planningAuthority,
       });
     } catch (e) {
       setError('Could not fetch data. Check your connection and try again.');
@@ -286,6 +338,34 @@ export default function PropertyIntelScreen() {
             </TouchableOpacity>
           </Section>
 
+          {/* Local Council Planning Applications */}
+          <Section title="Planning Applications" icon="construct" color="#e67e22">
+            {data.planningAuthority ? (
+              <Row label="Local Authority" value={data.planningAuthority} />
+            ) : null}
+            {data.planningApps.length > 0 ? (
+              <View style={{ marginTop: 8 }}>
+                <Text style={styles.planIntro}>
+                  {data.planningApps.length} recent application{data.planningApps.length !== 1 ? 's' : ''} within ~1km:
+                </Text>
+                {data.planningApps.map((app, i) => (
+                  <PlanningAppCard
+                    key={i}
+                    app={app}
+                    onOpen={() => app.url && Linking.openURL(app.url)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.noData}>
+                No recent planning applications found nearby, or this council isn't yet covered by the PlanIt aggregator.
+              </Text>
+            )}
+            <Text style={styles.constraintNote}>
+              Tip: nearby approvals for similar conversions (e.g. HMO, loft, extension) are strong evidence your own application would succeed.
+            </Text>
+          </Section>
+
           {/* Investor Summary */}
           <Section title="Investor Summary" icon="analytics" color="#2c3e50">
             <Text style={styles.summaryText}>
@@ -348,6 +428,16 @@ const styles = StyleSheet.create({
   soldDate: { fontSize: 12, color: '#888', marginTop: 2 },
   soldType: { fontSize: 11, color: '#aaa', marginTop: 2 },
   noData: { color: '#aaa', fontSize: 13, fontStyle: 'italic', marginTop: 8 },
+  planIntro: { fontSize: 13, color: '#666', marginBottom: 10 },
+  planCard: { backgroundColor: '#f8f9fa', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#eee' },
+  planCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  planStatus: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  planStatusText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  planDate: { fontSize: 12, color: '#999' },
+  planDesc: { fontSize: 13, color: '#333', lineHeight: 18 },
+  planAddress: { fontSize: 12, color: '#888', marginTop: 4 },
+  planFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  planRef: { fontSize: 11, color: '#aaa' },
   summaryText: { fontSize: 14, color: '#444', lineHeight: 22 },
   disclaimer: { fontSize: 11, color: '#aaa', fontStyle: 'italic', textAlign: 'center', marginBottom: 30, marginTop: 4 },
 });
